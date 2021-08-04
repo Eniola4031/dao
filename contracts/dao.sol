@@ -1,11 +1,10 @@
+// SPDX-License-Identifier: <SPDX-License-Identifier>;
 pragma solidity ^0.8.0;
-import 'https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contracts/token/ERC20/IERC20.sol';
+// import 'https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contracts/token/ERC20/IERC20.sol';
 contract Dao {
     // Global Variables
     uint public totalTokenByMembers;
     uint public votingDuration;
-    uint public maxVoteScore;
-    uint public minVoteScore;
     uint requiredAmountOfToken;
     // should be fixed
     uint public maxFundingDuration;
@@ -15,32 +14,22 @@ contract Dao {
         address projectWallet;
         string projectName;
         string projectDescription;
-        uint fundRequested;
-        uint fundRaised;
-        uint fundingStartDate;
-        uint fundingEndDate;
         uint createdAt;
         uint yesVotes;
         uint noVotes;
         ProposalVotingState proposalVotingState;
-        ProposalFundingState proposalFundingState;
         mapping(address => Vote) votesByMember;
         mapping(address => uint) contributor;
         address[] contributors;
     }
     enum ProposalVotingState{
             REJECTED,
-            PENDING,
-            APPROVED
-    }
-    enum ProposalFundingState{
             ONGOING,
-            FUNDED,
-            CLOSED
+            APPROVED
     }
     uint projectId;
     ProjectProposal[] ProjectProposals;
-    mapping(uint => ProjectProposal) public allProjectProposals;
+    mapping(uint => ProjectProposal) public project_Proposal;
     // DAO Members will be added by admin
     struct DaoMember{
         address member;
@@ -55,7 +44,7 @@ contract Dao {
     // enum Payment { Start, Ongoing, Closed } // platform
     // constructor
     address admin;
-    event Result(uint projectId, ProposalVotingState result);
+    event Result(uint projectId, ProposalVotingState result, uint yesVotes, uint noVotes);
     event NewMember(address member_, string message);
     event SubmittedProjectProposal(string projectName);
     event Votes(uint projectId_, uint yesVotes, uint noVotes);
@@ -85,33 +74,21 @@ contract Dao {
     // function removeDaoMember(address _member) public onlyAdmin{
     //     delete DaoMembers[_member];
     // }
-    // require (approvedProposal = ) require that only approved proposal can be listed for contribution
-    // have an array of summon-approved proposal, require that only these proposal are listed for vote
-    // require that the provided address is not address(0) in withdraw function!!
     // PROPOSAL FUNCTIONS
-    function SubmitProjectProposal(
-        address _projectOwner,
-        string memory _projectName,
-        string memory _projectDescription,
-        uint _fundRequested,
-        uint _fundStartDate,
-        uint _fundEndDate) public {
-        ProjectProposal storage project =  allProjectProposals[projectId];
+    function SubmitProjectProposal(address _projectOwner, string memory _projectName,string memory _projectDescription) public {
+        ProjectProposal storage project =  project_Proposal[projectId];
         project.projectOwner = _projectOwner;
         project.projectName = _projectName;
         project.projectDescription = _projectDescription;
-        project.fundRequested = _fundRequested;
-        project.fundingStartDate = _fundStartDate;
-        project.fundingEndDate = _fundEndDate;
-        project.proposalVotingState = ProposalVotingState.PENDING;
+        project.proposalVotingState = ProposalVotingState.ONGOING;
         project.createdAt = block.timestamp;
         projectId++;
         emit SubmittedProjectProposal(_projectName);
     }
     function vote(uint _projectId, uint8 _vote) public onlyDaoMember {
         require (_projectId < projectId);
-        ProjectProposal storage project =  allProjectProposals[_projectId];
-        require (project.proposalVotingState == ProposalVotingState.PENDING);
+        ProjectProposal storage project =  project_Proposal[_projectId];
+        require (project.proposalVotingState == ProposalVotingState.ONGOING);
         require (block.timestamp <= (project.createdAt + votingDuration), 'Voting closed');
         require (project.votesByMember[msg.sender] == Vote.Null, 'Already voted');
         require (_vote < 3,'Invalid Selection');
@@ -119,21 +96,23 @@ contract Dao {
         DaoMember memory _daoMember = DaoMembers[msg.sender];
         if (vote_ == Vote.Yes) {
             project.yesVotes += _daoMember.votingPower;
+            project.votesByMember[msg.sender] == Vote.Yes;
         }
         if (vote_ == Vote.No) {
             project.noVotes += _daoMember.votingPower;
+            project.votesByMember[msg.sender] == Vote.No;
         }
         emit Votes(_projectId, project.yesVotes, project.noVotes);
     }
     function checkVoteResult(uint projectId_) public {
         require (projectId_ < projectId);
-        ProjectProposal storage project =  allProjectProposals[projectId_];
+        ProjectProposal storage project =  project_Proposal[projectId_];
         require (block.timestamp <= (project.createdAt + votingDuration), 'Voting closed');
         if (project.yesVotes > project.noVotes) {
-            project.proposalVotingState == ProposalVotingState.APPROVED;
+            project.proposalVotingState = ProposalVotingState.APPROVED;
         } else {
-            project.proposalVotingState == ProposalVotingState.REJECTED;
+            project.proposalVotingState = ProposalVotingState.REJECTED;
         }
-        emit Result(projectId_, project.proposalVotingState);
+        emit Result(projectId_, project.proposalVotingState, project.yesVotes, project.noVotes);
     }
 }
