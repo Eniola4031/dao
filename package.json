@@ -1,0 +1,22 @@
+{
+  "name": "dao",
+  "version": "1.0.0",
+  "description": "Decentalised Autonomous org",
+  "main": "truffle-config.js",
+  "directories": {
+    "test": "test"
+  },
+  "scripts": {
+    "test": "truffle compile"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Eniola4031/dao.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Eniola4031/dao/issues"
+  },
+  "homepage": "https://github.com/Eniola4031/dao#readme"
+}
