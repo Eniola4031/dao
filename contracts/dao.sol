@@ -1,8 +1,9 @@
-// SPDX-License-Identifier: <SPDX-License-Identifier>;
+// SPDX-License-Identifier: GPL-3.0;
 pragma solidity ^0.8.0;
-// import 'https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contracts/token/ERC20/IERC20.sol';
+import 'https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contracts/token/ERC20/IERC20.sol';
 contract Dao {
     // Global Variables
+    address nativeToken;
     uint public totalTokenByMembers;
     uint public votingDuration;
     uint requiredAmountOfToken;
@@ -11,7 +12,7 @@ contract Dao {
     // Proposals
     struct ProjectProposal {
         address projectOwner;
-        address projectWallet;
+        // address projectWallet;
         string projectName;
         string projectDescription;
         uint createdAt;
@@ -42,17 +43,20 @@ contract Dao {
     // require that only approved proposal
     enum Vote { Null, No, Yes }
     // enum Payment { Start, Ongoing, Closed } // platform
+    
     // constructor
     address admin;
     event Result(uint projectId, ProposalVotingState result, uint yesVotes, uint noVotes);
     event NewMember(address member_, string message);
     event SubmittedProjectProposal(string projectName);
     event Votes(uint projectId_, uint yesVotes, uint noVotes);
-    constructor (address _admin) {
+    
+    constructor (address _admin, address _token) {
         require(_admin != address(0), 'Only Admin can call this function');
         votingDuration = 7 days;
         maxFundingDuration = 30 days;
         admin = _admin;
+        nativeToken = _token;
     }
     modifier onlyAdmin(){
         require(msg.sender == admin, 'Only Admin can call this function');
@@ -76,6 +80,9 @@ contract Dao {
     // }
     // PROPOSAL FUNCTIONS
     function SubmitProjectProposal(address _projectOwner, string memory _projectName,string memory _projectDescription) public {
+        IERC20 token = IERC20(nativeToken);
+        require (token.balanceOf(_projectOwner) >= 1000, "HGN: Insufficient token to submit proposal");
+        require (_projectOwner != address(0), "Owner's address cannot be address zero");
         ProjectProposal storage project =  project_Proposal[projectId];
         project.projectOwner = _projectOwner;
         project.projectName = _projectName;
@@ -96,18 +103,18 @@ contract Dao {
         DaoMember memory _daoMember = DaoMembers[msg.sender];
         if (vote_ == Vote.Yes) {
             project.yesVotes += _daoMember.votingPower;
-            project.votesByMember[msg.sender] == Vote.Yes;
+            project.votesByMember[msg.sender] = Vote.Yes;
         }
         if (vote_ == Vote.No) {
             project.noVotes += _daoMember.votingPower;
-            project.votesByMember[msg.sender] == Vote.No;
+            project.votesByMember[msg.sender] = Vote.No;
         }
         emit Votes(_projectId, project.yesVotes, project.noVotes);
     }
-    function checkVoteResult(uint projectId_) public {
+    function updateVotingState(uint projectId_) public {
         require (projectId_ < projectId);
         ProjectProposal storage project =  project_Proposal[projectId_];
-        require (block.timestamp <= (project.createdAt + votingDuration), 'Voting closed');
+        require (block.timestamp >= (project.createdAt + votingDuration), 'Voting closed');
         if (project.yesVotes > project.noVotes) {
             project.proposalVotingState = ProposalVotingState.APPROVED;
         } else {
@@ -115,4 +122,88 @@ contract Dao {
         }
         emit Result(projectId_, project.proposalVotingState, project.yesVotes, project.noVotes);
     }
+}
+5:35
+// SPDX-License-Identifier: GPL-3.0
+pragma solidity ^0.8.0;
+import "./TimeLockedWalletFactory.sol";
+import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+contract FundProject is TimeLockedWalletFactory{
+    
+    uint maxFundingPeriod;
+    address admin;
+    address wallet;
+    uint projectId;
+    
+    struct Project {
+        string projectName;
+        string projectDescription;
+        address projectOwner;
+        address projectWallet;
+        uint fundRequested;
+        uint fundRaised;
+        uint fundingStartDate;
+        uint fundingEndDate;
+        uint unitPrice;
+        mapping (address => uint) contributorsToToken;
+        address[] contributors;
+    }
+    mapping(uint => Project ) OwnerToProject;
+    
+    constructor (address _admin) {
+        maxFundingPeriod = 30 days;
+        admin = _admin;
+    }
+    
+    modifier onlyAdmin(){
+        require(msg.sender == admin, 'Only Admin can call this function');
+        _;
+    }
+    
+    event createdProject (string projectName, address wallet, uint fundRequested);
+    
+    function createProject(
+        string memory _projectName,
+        string memory _projectDescription, 
+        address payable _projectOwner,
+        uint _fundRequested, 
+        uint _fundingStartDate, 
+        uint _fundingEndDate, 
+        uint _unitPrice) public onlyAdmin {
+           require (_fundingEndDate - _fundingStartDate < maxFundingPeriod);
+           wallet = TimeLockedWalletFactory.newTimeLockedWallet(admin, _projectOwner, _fundingEndDate);
+           Project storage project =  OwnerToProject[projectId];
+           project.projectWallet = wallet;
+           project.projectName = _projectName;
+           project.projectDescription = _projectDescription;
+           project.projectOwner = _projectOwner;
+           project.fundRequested = _fundRequested;
+           project.fundingStartDate = _fundingStartDate;
+           project.fundingEndDate = _fundingEndDate;
+           project.unitPrice = _unitPrice;
+           projectId++;
+           emit createdProject (_projectName, wallet, _fundRequested);
+        }
+        
+        
+    function fundProject(uint _projectId, uint amount) public {
+        Project storage project =  OwnerToProject[_projectId];
+        require (block.timestamp > project.fundingStartDate, "Funding has not started");
+        require (block.timestamp < project.fundingEndDate, "Funding has ended");
+        ERC20 token = ERC20(0x5eD8BD53B0c3fa3dEaBd345430B1A3a6A4e8BD7C);
+        token.transferFrom(msg.sender, project.projectWallet, amount);
+        project.fundRaised += amount;
+        uint numberOfToken = amount / project.unitPrice;
+        project.contributorsToToken[msg.sender] =numberOfToken;
+    }
+        
+    
+        
+        
+        
+        
+        
+        
+        
+        
 }
